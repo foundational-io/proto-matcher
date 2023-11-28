@@ -1,2 +1,2 @@
-protobuf>=3.11.3
-pyhamcrest>=2.0.2
+protobuf>=4.23.0
+pyhamcrest>=2.1.0
