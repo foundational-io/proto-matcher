@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 from google.protobuf import text_format
@@ -270,18 +271,44 @@ class ProtoCompareTest(unittest.TestCase):
             compare.proto_compare(actual, expected, opts=opts), True)
 
     def test_compare_proto_repeated_fields_ignoring_order(self):
+        # Create expected and actual protos with the same content but reverse the `bars` field in the actual proto.
         expected = text_format.Parse(_TEST_PROTO, test_pb2.Foo())
         actual = text_format.Parse(_TEST_PROTO, test_pb2.Foo())
         reversed_bars = actual.bars[::-1]
         del actual.bars[:]
         actual.bars.extend(reversed_bars)
+
+        # Compare without ignoring repeated fields order - expect comparison to fail.
         self.assertProtoCompareToBe(compare.proto_compare(actual, expected),
                                     False)
 
+        # Compare with ignoring repeated fields order - expect comparison to pass.
         opts = compare.ProtoComparisonOptions(
             repeated_field_comp=compare.RepeatedFieldComparison.AS_SET)
         self.assertProtoCompareToBe(
             compare.proto_compare(actual, expected, opts=opts), True)
+
+    def test_compare_proto_repeated_fields_ignoring_order_does_not_modify_objects(self):
+        # Create expected and actual protos with the same content but reverse
+        # the `bars` field in the actual proto.
+        expected = text_format.Parse(_TEST_PROTO, test_pb2.Foo())
+        actual = text_format.Parse(_TEST_PROTO, test_pb2.Foo())
+        reversed_bars = actual.bars[::-1]
+        del actual.bars[:]
+        actual.bars.extend(reversed_bars)
+
+        # Copy the expected and actual protos to ensure that the original
+        # objects are not modified.
+        expected_copy = copy.deepcopy(expected)
+        actual_copy = copy.deepcopy(actual)
+
+        # Compare with ignoring repeated fields order (we don't really care
+        # about the comparison result in this test).
+        opts = compare.ProtoComparisonOptions(
+            repeated_field_comp=compare.RepeatedFieldComparison.AS_SET)
+        compare.proto_compare(actual, expected, opts=opts)
+        self.assertEqual(expected, expected_copy)
+        self.assertEqual(actual, actual_copy)
 
 
 if __name__ == '__main__':
