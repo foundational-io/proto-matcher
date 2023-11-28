@@ -1,3 +1,4 @@
+import copy
 import unittest
 
 from hamcrest import *
@@ -195,10 +196,17 @@ class ProtoCompareTest(unittest.TestCase):
         reversed_bars = actual.bars[::-1]
         del actual.bars[:]
         actual.bars.extend(reversed_bars)
+
+        expected_copy = copy.deepcopy(expected)
+        actual_copy = copy.deepcopy(actual)
+
         assert_that(actual, not_(equals_proto(expected)))
 
         assert_that(actual,
                     ignoring_repeated_field_ordering(equals_proto(expected)))
+
+        assert expected == expected_copy
+        assert actual == actual_copy
 
 
 if __name__ == '__main__':
