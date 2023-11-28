@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="proto_matcher",
-    version="0.0.3",
+    version="0.0.4",
     author="dayfine",
     author_email="",
     description="Test matcher for protobuffer",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/dayfine/proto-matcher",
+    url="https://github.com/foundational-io/proto-matcher",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
