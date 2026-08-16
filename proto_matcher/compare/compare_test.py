@@ -311,5 +311,78 @@ class ProtoCompareTest(unittest.TestCase):
         self.assertEqual(actual, actual_copy)
 
 
+class SelfReferentialMessageTest(unittest.TestCase):
+    """A message with a field of its own type must not make comparison diverge.
+
+    The walk enumerates the DESCRIPTOR's fields, so for a self-referential message the set
+    of reachable field PATHS is infinite. What bounds the walk has to be the DATA: only
+    fields that are actually present get descended into.
+    """
+
+    def assertProtoCompareToBe(self, result: compare.ProtoComparisonResult,
+                               to_be: bool):
+        self.assertEqual(result.is_equal, to_be, result.explanation)
+
+    @staticmethod
+    def _nested(depth: int, leaf: str) -> test_pb2.TypeInfo:
+        """`list_of`-nested TypeInfo, `depth` levels deep, ending in `single_type=leaf`."""
+        type_info = test_pb2.TypeInfo(single_type=leaf)
+        for _ in range(depth):
+            type_info = test_pb2.TypeInfo(list_of=type_info)
+        return type_info
+
+    def test_unset_self_referential_field_terminates(self):
+        # Regression: `Typed.type` is unset on both sides. `getattr` on an unset singular
+        # message field returns a default instance, and a protobuf message is always
+        # truthy -- so a truthiness check saw `type`, then `type.list_of`, and so on, as
+        # present, and recursed until the stack blew.
+        for scope in (compare.ProtoComparisonScope.FULL,
+                      compare.ProtoComparisonScope.PARTIAL):
+            with self.subTest(scope=scope):
+                opts = compare.ProtoComparisonOptions(scope=scope)
+                self.assertProtoCompareToBe(
+                    compare.proto_compare(test_pb2.Typed(name='x'),
+                                          test_pb2.Typed(name='x'), opts), True)
+
+    def test_bare_self_referential_message_terminates(self):
+        self.assertProtoCompareToBe(
+            compare.proto_compare(test_pb2.TypeInfo(), test_pb2.TypeInfo()),
+            True)
+
+    def test_nested_values_are_still_compared_down_to_the_leaf(self):
+        # This is the test that rules out "stop on a revisited message type", and any fixed
+        # depth cap, as the fix. Both sides revisit TypeInfo three times and differ ONLY at
+        # the innermost leaf. Truncating on the revisit would call these equal -- a silent
+        # false pass, strictly worse than the crash it replaced.
+        self.assertProtoCompareToBe(
+            compare.proto_compare(
+                test_pb2.Typed(name='x', type=self._nested(2, 'int')),
+                test_pb2.Typed(name='x', type=self._nested(2, 'string'))), False)
+
+    def test_deeply_nested_equal_values_compare_equal(self):
+        self.assertProtoCompareToBe(
+            compare.proto_compare(
+                test_pb2.Typed(name='x', type=self._nested(8, 'int')),
+                test_pb2.Typed(name='x', type=self._nested(8, 'int'))), True)
+
+    def test_presence_of_an_empty_submessage_is_significant(self):
+        # Behaviour change: under FULL, an explicitly-set but empty submessage is no longer
+        # equal to an absent one. The two serialize differently and `HasField` tells them
+        # apart, so reporting them equal was a bug.
+        self.assertProtoCompareToBe(
+            compare.proto_compare(test_pb2.Typed(type=test_pb2.TypeInfo()),
+                                  test_pb2.Typed()), False)
+
+    def test_partial_scope_ignores_an_unset_expectation(self):
+        # PARTIAL is unchanged: an unset expected field constrains nothing, whether or not
+        # the actual sets it.
+        opts = compare.ProtoComparisonOptions(
+            scope=compare.ProtoComparisonScope.PARTIAL)
+        self.assertProtoCompareToBe(
+            compare.proto_compare(test_pb2.Typed(name='x',
+                                                 type=self._nested(3, 'int')),
+                                  test_pb2.Typed(name='x'), opts), True)
+
+
 if __name__ == '__main__':
     unittest.main()

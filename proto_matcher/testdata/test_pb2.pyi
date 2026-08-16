@@ -58,3 +58,19 @@ class Baz(_message.Message):
     STATUS_FIELD_NUMBER: _ClassVar[int]
     status: Baz.Status
     def __init__(self, status: _Optional[_Union[Baz.Status, str]] = ...) -> None: ...
+
+class TypeInfo(_message.Message):
+    __slots__ = ["single_type", "list_of"]
+    SINGLE_TYPE_FIELD_NUMBER: _ClassVar[int]
+    LIST_OF_FIELD_NUMBER: _ClassVar[int]
+    single_type: str
+    list_of: TypeInfo
+    def __init__(self, single_type: _Optional[str] = ..., list_of: _Optional[_Union[TypeInfo, _Mapping]] = ...) -> None: ...
+
+class Typed(_message.Message):
+    __slots__ = ["name", "type"]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    type: TypeInfo
+    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[TypeInfo, _Mapping]] = ...) -> None: ...
