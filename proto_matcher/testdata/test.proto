@@ -31,3 +31,21 @@ message Baz {
   }
   Status status = 1;
 }
+
+// A SELF-REFERENTIAL message: `list_of` is itself a TypeInfo. This is the shape real
+// schemas use to model nested types (`list<list<int>>`), so the cycle is legitimate and
+// permanent -- it cannot be designed away. It exists here to pin the comparison walk's
+// termination behaviour.
+message TypeInfo {
+  oneof type {
+    string single_type = 1;
+    TypeInfo list_of = 2;
+  }
+}
+
+// Holds a TypeInfo the way a real schema holds one: as an ordinary singular field that is
+// very often UNSET. Comparing two of these must not depend on TypeInfo's depth.
+message Typed {
+  string name = 1;
+  TypeInfo type = 2;
+}

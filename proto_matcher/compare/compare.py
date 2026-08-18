@@ -132,6 +132,8 @@ class MessageDifferencer():
         if cmp_args.field_path in self._opts.ignore_field_paths:
             return _equality_result()
 
+        parent_expected = cmp_args.expected
+        parent_actual = cmp_args.actual
         cmp_args.expected = getattr(cmp_args.expected, field_name, None)
         cmp_args.actual = getattr(cmp_args.actual, field_name, None)
 
@@ -142,7 +144,37 @@ class MessageDifferencer():
                 return self._compare_map(cmp_args)
             return self._compare_repeated_field(cmp_args)
 
-        # Singular field
+        # Singular MESSAGE field: decide on PRESENCE, taken from the parent via HasField.
+        #
+        # Reading presence off the submessage itself does not work: `getattr` on an unset
+        # singular message field returns a default instance, and a protobuf message is always
+        # truthy, so `_is_field_set` reports every message field as set. Recursion therefore
+        # used to descend into fields nobody had set -- which never terminates for a
+        # self-referential message (see testdata `TypeInfo.list_of`), regardless of the data.
+        #
+        # Deciding on presence terminates instead, because recursion now follows only fields
+        # that are actually present, and any real message is finite. Note this is NOT cycle
+        # detection: legitimately nested values (`list<list<int>>`) are still compared all the
+        # way down. Truncating on a revisited message TYPE would report `list<list<int>>` and
+        # `list<list<string>>` as equal.
+        if _is_message(cmp_args.field_desc):
+            expected_is_set = parent_expected.HasField(field_name)
+            actual_is_set = parent_actual.HasField(field_name)
+
+            # PARTIAL semantics are unchanged: an unset expectation constrains nothing. This
+            # also terminates, since descent requires the EXPECTED side to be present.
+            if self._opts.scope == ProtoComparisonScope.PARTIAL:
+                if not expected_is_set:
+                    return _equality_result()
+                return self._compare_value(cmp_args)
+
+            if not expected_is_set and not actual_is_set:
+                return _equality_result()
+            if expected_is_set != actual_is_set:
+                return _inequality_result(cmp_args)
+            return self._compare_value(cmp_args)
+
+        # Singular non-message field
         if (self._opts.scope == ProtoComparisonScope.PARTIAL and
                 not _is_field_set(cmp_args.expected, cmp_args.field_desc)):
             return _equality_result()
