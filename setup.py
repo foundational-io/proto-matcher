@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="proto_matcher",
-    version="0.0.5",
+    version="0.0.6",
     author="dayfine",
     author_email="",
     description="Test matcher for protobuffer",

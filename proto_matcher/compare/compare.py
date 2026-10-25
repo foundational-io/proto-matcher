@@ -190,7 +190,7 @@ class MessageDifferencer():
         if self._opts.repeated_field_comp == RepeatedFieldComparison.AS_SET:
             # We want to compare the repeated fields as sets, so we order them, but we copy them first into list to
             # avoid modifying the original messages.
-            as_set_key = lambda x: str(x)
+            as_set_key = lambda x: _as_set_key(x, cmp_args.field_desc)
             expected_clone.sort(key=as_set_key)
             actual_clone.sort(key=as_set_key)
 
@@ -268,6 +268,36 @@ def _combine_results(
         explanation='\n'.join(
             [res.explanation for res in results if res.explanation]),
     )
+
+
+def _as_set_key(value: Any, field_desc: _FieldDescriptor) -> str:
+    """Sort key that pairs AS_SET elements: elements that compare equal get equal keys.
+
+    Every nested repeated field and map is sorted by this same key, so the key does not depend
+    on stored order at any depth (str() prints nested repeated fields in stored order, which
+    paired equal elements with the wrong partner). Scalars at their default value are left out,
+    as the comparison compares them by value, not presence.
+    """
+    if not _is_message(field_desc):
+        return repr(value)
+    parts = []
+    for fd in value.DESCRIPTOR.fields:
+        field_value = getattr(value, fd.name)
+        if fd.label == _FieldDescriptor.LABEL_REPEATED:
+            if isinstance(field_value, collections.abc.Mapping):
+                value_desc = fd.message_type.fields_by_name['value']
+                items = sorted(f'{key!r}={_as_set_key(item, value_desc)}'
+                               for key, item in field_value.items())
+            else:
+                items = sorted(_as_set_key(item, fd) for item in field_value)
+            if items:
+                parts.append(f'{fd.number}:[{",".join(items)}]')
+        elif _is_message(fd):
+            if value.HasField(fd.name):
+                parts.append(f'{fd.number}:{_as_set_key(field_value, fd)}')
+        elif field_value != fd.default_value:
+            parts.append(f'{fd.number}:{field_value!r}')
+    return '{' + ','.join(parts) + '}'
 
 
 def _is_message(field_desc: _FieldDescriptor) -> bool:

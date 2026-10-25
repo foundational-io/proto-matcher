@@ -310,6 +310,35 @@ class ProtoCompareTest(unittest.TestCase):
         self.assertEqual(expected, expected_copy)
         self.assertEqual(actual, actual_copy)
 
+    def test_compare_proto_nested_repeated_fields_ignoring_order(self):
+        # The Bars differ only by their `notes`, and each Bar lists its notes in the opposite order
+        # on the two sides. Sorting the Bars by str() compared {a,d} with {c,b} and {b,c} with
+        # {d,a}; the two sides hold the same sets at both levels.
+        expected = text_format.Parse(
+            'bars { notes: "b" notes: "c" } bars { notes: "a" notes: "d" }',
+            test_pb2.Foo())
+        actual = text_format.Parse(
+            'bars { notes: "c" notes: "b" } bars { notes: "d" notes: "a" }',
+            test_pb2.Foo())
+
+        opts = compare.ProtoComparisonOptions(
+            repeated_field_comp=compare.RepeatedFieldComparison.AS_SET)
+        self.assertProtoCompareToBe(
+            compare.proto_compare(actual, expected, opts=opts), True)
+
+    def test_compare_proto_nested_repeated_fields_ignoring_order_still_finds_a_difference(self):
+        expected = text_format.Parse(
+            'bars { notes: "b" notes: "c" } bars { notes: "a" notes: "d" }',
+            test_pb2.Foo())
+        actual = text_format.Parse(
+            'bars { notes: "c" notes: "b" } bars { notes: "d" notes: "x" }',
+            test_pb2.Foo())
+
+        opts = compare.ProtoComparisonOptions(
+            repeated_field_comp=compare.RepeatedFieldComparison.AS_SET)
+        self.assertProtoCompareToBe(
+            compare.proto_compare(actual, expected, opts=opts), False)
+
 
 class SelfReferentialMessageTest(unittest.TestCase):
     """A message with a field of its own type must not make comparison diverge.
